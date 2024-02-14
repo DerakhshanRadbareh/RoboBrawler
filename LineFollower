@@ -1,0 +1,78 @@
+#include <Servo.h>
+#define gripperPin 7 
+
+Servo gripperServo;
+
+int Left_p = 11;
+int Left_n = 10;
+int Right_p = 6;
+int Right_n = 9;
+
+int a=0;
+
+void setup() {
+  Serial.begin(9600);
+  gripperServo.attach(gripperPin);
+  
+  pinMode(Left_p, OUTPUT);
+  pinMode(Left_n, OUTPUT);
+  pinMode(Right_p, OUTPUT);
+  pinMode(Right_n, OUTPUT);
+
+  pinMode(A0, INPUT);
+  pinMode(A1, INPUT);
+  pinMode(A2, INPUT);
+  pinMode(A3, INPUT);
+  pinMode(A4, INPUT);
+}
+
+void loop() {
+  
+  int ex_right = analogRead(A0);
+  int right = analogRead(A1);
+  int centre = analogRead(A2);
+  int left = analogRead(A3);
+  int ex_left = analogRead(A4);
+  
+  int speed = 240;  // Adjust this value to control the speed (0 is stopped, 255 is full speed)
+
+  if (ex_left > 700 && ex_right > 700) {
+
+     stopMotors();
+  }
+  if (ex_left < 700 && ex_right < 700) {
+    analogWrite(Left_p, speed);
+    digitalWrite(Left_n, LOW);
+    analogWrite(Right_p, speed);
+    digitalWrite(Right_n, LOW);
+  }
+
+  if (ex_left > 700 && ex_right < 700) {
+    analogWrite(Left_p, speed);
+    digitalWrite(Left_n, LOW);
+    analogWrite(Right_p, 0);  // Stop the right motor
+    digitalWrite(Right_n, LOW);
+  }
+
+  if (ex_left < 700 && ex_right > 700) {
+    analogWrite(Left_p, 0);  // Stop the left motor
+    digitalWrite(Left_n, LOW);
+    analogWrite(Right_p, speed);
+    digitalWrite(Right_n, LOW);
+  }
+  
+}
+void stopMotors() {
+  digitalWrite(Left_p, LOW);
+  digitalWrite(Left_n, LOW);
+  digitalWrite(Right_p, LOW);
+  digitalWrite(Right_n, LOW);
+}
+void openGripper() {
+  gripperServo.write(90); // Adjust the angle to open the gripper
+  delay(500); // Adjust the delay based on your gripper's speed and stability
+}
+void closeGripper() {
+  gripperServo.write(0); // Adjust the angle to close the gripper
+  delay(500); // Adjust the delay based on your gripper's speed and stability
+}
