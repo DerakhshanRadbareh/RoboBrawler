@@ -1,0 +1,51 @@
+#include <NewPing.h>
+
+#define LEFT_TRIG_PIN 2
+#define LEFT_ECHO_PIN 3
+#define FRONT_TRIG_PIN 4
+#define FRONT_ECHO_PIN 5
+#define MOTOR_LEFT_PIN1 11
+#define MOTOR_LEFT_PIN2 10
+#define MOTOR_RIGHT_PIN1 9
+#define MOTOR_RIGHT_PIN2 6
+
+NewPing leftSensor(LEFT_TRIG_PIN, LEFT_ECHO_PIN);
+NewPing frontSensor(FRONT_TRIG_PIN, FRONT_ECHO_PIN);
+
+int baseSpeed = 200;  // Increase the base speed (adjust as needed)
+int correctionFactor = 20;  // Adjust as needed
+int minDistance = 5;  // Minimum distance to the wall
+
+void setup() {
+  pinMode(MOTOR_LEFT_PIN1, OUTPUT);
+  pinMode(MOTOR_LEFT_PIN2, OUTPUT);
+  pinMode(MOTOR_RIGHT_PIN1, OUTPUT);
+  pinMode(MOTOR_RIGHT_PIN2, OUTPUT);
+}
+
+void loop() {
+  int leftDistance = leftSensor.ping_cm();
+  int frontDistance = frontSensor.ping_cm();
+
+  // Adjust motor speeds based on sensor readings
+  int leftSpeed = baseSpeed + correctionFactor * (leftDistance - minDistance);
+  int rightSpeed = baseSpeed - correctionFactor * (leftDistance - minDistance);
+
+  // Avoid obstacles in the front
+  if (frontDistance < 20) {
+    // Stop the robot and turn right (adjust as needed)
+    analogWrite(MOTOR_LEFT_PIN1, 0);
+    analogWrite(MOTOR_LEFT_PIN2, 0);
+    analogWrite(MOTOR_RIGHT_PIN1, baseSpeed);
+    analogWrite(MOTOR_RIGHT_PIN2, 0);
+    delay(1000);  // Adjust delay as needed
+  } else {
+    // Set motor speeds for normal wall following
+    analogWrite(MOTOR_LEFT_PIN1, max(0, leftSpeed));
+    analogWrite(MOTOR_LEFT_PIN2, max(0, -leftSpeed));
+    analogWrite(MOTOR_RIGHT_PIN1, max(0, rightSpeed));
+    analogWrite(MOTOR_RIGHT_PIN2, max(0, -rightSpeed));
+  }
+
+  delay(50);  // Adjust delay as needed
+}
