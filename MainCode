@@ -1,7 +1,4 @@
-#include <Servo.h>
 #include <Adafruit_NeoPixel.h>
-
-Servo gripperServo;
 
 #define frontTrigPin 4
 #define frontEchoPin 5
@@ -21,7 +18,6 @@ Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800
 #define servoPin 7
 
  long duration, distance;
- Servo myservo;
 
 void setup() {
   Serial.begin(9600);
@@ -31,19 +27,15 @@ void setup() {
   pinMode(motor1Pin2, OUTPUT);
   pinMode(motor2Pin1, OUTPUT);
   pinMode(motor2Pin2, OUTPUT);
-  myservo.attach(servoPin);
+  pinMode(servoPin, OUTPUT);
 
   strip.begin();           // Initialize the NeoPixel strip
   strip.show();
 
-  gripperServo.attach(12);  // Attach the servo to pin 9 (change the pin number as per your setup)
   delay(1000);  // Allow time for servo to initialize
   
 }
-
 void loop() {
-  
-  closeGripper();
   
   // Trigger the ultrasonic sensor
   digitalWrite(frontTrigPin, LOW);
@@ -54,14 +46,14 @@ void loop() {
   duration = pulseIn(frontEchoPin, HIGH);
   distance = (duration / 2) * 0.0343;
   
-  Serial.print("Distance: ");
   Serial.println(distance);
   
   if (distance > 10) {
     // No obstacle in front, move forward
     moveForward();
     Serial.println("Move forward");
-  } else {
+  } 
+  else {
     // Obstacle detected, stop and check for open areas
     stopMotors();
     Serial.println("Stop");
@@ -78,18 +70,22 @@ void colorWipe(uint32_t color) {
   }
 }
 
-void openGripper() {
-  gripperServo.write(110);  // Move the servo to the open position (adjust angle as needed)
 
-}
+void moveServo(int angle) {
+  int pulseWidth = map(angle, 0, 180, 500, 2400);  // Map the angle to the pulse width range
 
-void closeGripper() {
-  gripperServo.write(43);  // Move the servo to the closed position (adjust angle as needed)
+  // Send the PWM signal to the servo
+  digitalWrite(servoPin, HIGH);
+  delayMicroseconds(pulseWidth);
+  digitalWrite(servoPin, LOW);
+
+  // Wait for the servo to reach the position
+  delay(1000);
 }
 
 void checkOpenArea() {
   // Move the servo to check both sides
-  myservo.write(180);
+  moveServo(180);
   delay(1000);
   // Trigger the ultrasonic sensor
   digitalWrite(frontTrigPin, LOW);
@@ -104,8 +100,10 @@ void checkOpenArea() {
   Serial.print("angel:0 ");
   Serial.print("Distance: ");
   Serial.println(distance);
-  myservo.write(0);
+  moveServo(0);
   delay(1000);
+
+  
   // Trigger the ultrasonic sensor
   digitalWrite(frontTrigPin, LOW);
   delayMicroseconds(2);
@@ -114,11 +112,10 @@ void checkOpenArea() {
   digitalWrite(frontTrigPin, LOW);
   duration = pulseIn(frontEchoPin, HIGH);
   distance = (duration / 2) * 0.0343;
-  myservo.write(90);
+  
+  moveServo(90);
   int rightDistance=distance;
-  Serial.print("angel:180 ");
-  Serial.print("Distance: ");
-  Serial.println(distance);
+
   // Decide the direction to turn based on the open area
   if (leftDistance > rightDistance) {
     // Turn left
@@ -140,10 +137,10 @@ void checkOpenArea() {
 }
 void moveForward() {
   colorWipe(strip.Color(255, 0, 0));  // green wipe
-  digitalWrite(motor1Pin1, HIGH);
-  digitalWrite(motor1Pin2, LOW);
-  digitalWrite(motor2Pin1, HIGH);
-  digitalWrite(motor2Pin2, LOW);
+  analogWrite(motor1Pin1, 200);
+  analogWrite(motor1Pin2, 0);
+  analogWrite(motor2Pin1, 200);
+  analogWrite(motor2Pin2, 0);
 }
 
 void stopMotors() {
@@ -158,14 +155,14 @@ void turnLeft() {
   colorWipe(strip.Color(0, 0, 255));  // green wipe
   analogWrite(motor1Pin1, 0);
   analogWrite(motor1Pin2, 0);
-  analogWrite(motor2Pin1, 220);
+  analogWrite(motor2Pin1, 200);
   analogWrite(motor2Pin2, 0);
   delay(300);
 }
 
 void turnRight() {
   colorWipe(strip.Color(0, 0, 255));  // green wipe
-  analogWrite(motor1Pin1, 220);
+  analogWrite(motor1Pin1, 200);
   analogWrite(motor1Pin2, 0);
   analogWrite(motor2Pin1, 0);
   analogWrite(motor2Pin2, 0);
