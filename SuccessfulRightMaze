@@ -1,8 +1,5 @@
 const int gripperPin = 12;
 
-int servoPos = 0;
-int rotatorPos = 0;
-
 const int motorA1 = 10; //Left motor, set to HIGH for backwards
 const int motorA2 = 11; //Left motor, Set to HIGH for forwards
 
@@ -10,7 +7,7 @@ const int motorB1 = 6; //Right motor, Set to HIGH for forwards
 const int motorB2 = 9; //Right motor, Set to HIGH for backwards
 
 const byte pulsePinLeft = 2; //Pin connected to left encoder
-const byte pulsePinRight = 12;  //Pin conneccted to right encoder
+const byte pulsePinRight = 3;  //Pin conneccted to right encoder
 
 unsigned long PulseCountLeft;
 unsigned long PulseCountRight;
@@ -19,9 +16,9 @@ unsigned long PulseCountRight;
 const unsigned MaxPulseLength = 2000;
 
 const int trigPinFront = 4; //pin for sending the sound
-const int echoPinFront = 3; //pin for receiving the sound
-const int trigPinRight = 8; //pin for sending the sound
-const int echoPinRight = 5; //pin for receiving the sound
+const int echoPinFront = 5; //pin for receiving the sound
+const int trigPinRight = 7; //pin for sending the sound
+const int echoPinRight = 8; //pin for receiving the sound
 
 long duration; //time the sound takes to travel
 long distanceFront; //distance in cm, will be calculated from the duration
@@ -32,7 +29,6 @@ int minDistance = 28;
 void setup() {
   // put your setup code here, to run once:
   pinMode(gripperPin, OUTPUT);
-
 
   pinMode(motorA1, OUTPUT);
   pinMode(motorA2, OUTPUT);
@@ -348,24 +344,4 @@ void turnRight(){
   analogWrite(motorA2, 200);
   analogWrite(motorB1, 0);
   analogWrite(motorB2, 200);
-}
-
-void gripperOpen(){
-  for(int i = 0;i < 8; i++){
-    digitalWrite(gripperPin, HIGH);
-    delayMicroseconds(1700); // Duration of the pulse in microseconds
-    digitalWrite(gripperPin, LOW);
-    // Pulses duration: 1700 = open
-    delay(20);
-  }
-}
-
-void gripperClose(){
-  for(int i = 0;i < 8; i++){
-    digitalWrite(gripperPin, HIGH);
-    delayMicroseconds(1050); // Duration of the pulse in microseconds
-    digitalWrite(gripperPin, LOW);
-    // Pulses duration: 1050 = fully closed
-    delay(20);
-  }
 }
