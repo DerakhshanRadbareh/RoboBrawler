@@ -1,3 +1,10 @@
+#include <Adafruit_NeoPixel.h>
+
+#define PIN 13
+#define NUMPIXELS 4
+
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
+
 const int gripperPin = 12;
 
 const int motorA1 = 10; //Left motor, set to HIGH for backwards
@@ -26,6 +33,7 @@ long distanceRight;
 
 int minDistance = 28;
 
+
 void setup() {
   // put your setup code here, to run once:
   pinMode(gripperPin, OUTPUT);
@@ -44,8 +52,11 @@ void setup() {
   pinMode(trigPinRight, OUTPUT); //output, since arduino tells the trigger when to send the sound
   pinMode(echoPinRight, INPUT); // input, since the echo tells the arduino how long it was on for
 
+  strip.begin();           // Initialize the NeoPixel strip
+  strip.show();
+  
   Serial.begin(9600); //to output the distance to the console
-
+  
 }//end setup
 
 void loop() {
@@ -284,6 +295,7 @@ void waitUntilPulseCountRight(unsigned long count){
 }//end waitUntilRight
 
 void stopRobot(){
+  colorWipe(strip.Color(0, 255, 0)); //red
   digitalWrite(motorA1, LOW);
   digitalWrite(motorA2, LOW);
   digitalWrite(motorB1, LOW);
@@ -291,6 +303,7 @@ void stopRobot(){
 }
 
 void moveForwards(){
+  colorWipe(strip.Color(255, 0, 0));
   digitalWrite(motorA1, LOW);
   digitalWrite(motorA2, HIGH);
   digitalWrite(motorB1, HIGH);
@@ -319,6 +332,7 @@ void moveBackwards(){
 }
 
 void turnLeft(){
+  colorWipe(strip.Color(0, 0, 255)); //Blue
   digitalWrite(motorA1, HIGH);
   digitalWrite(motorA2, LOW);
   digitalWrite(motorB1, HIGH);
@@ -333,6 +347,7 @@ void turnLeft(){
 }
 
 void turnRight(){
+  colorWipe(strip.Color(0, 0, 255)); //Blue
   digitalWrite(motorA1, LOW);
   digitalWrite(motorA2, HIGH);
   digitalWrite(motorB1, LOW);
@@ -344,4 +359,12 @@ void turnRight(){
   analogWrite(motorA2, 200);
   analogWrite(motorB1, 0);
   analogWrite(motorB2, 200);
+}
+
+void colorWipe(uint32_t color) {
+  for(int i = 0; i < strip.numPixels(); i++) {
+    strip.setPixelColor(i, color);
+    strip.show();
+
+  }
 }
