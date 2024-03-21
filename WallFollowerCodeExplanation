@@ -1,0 +1,329 @@
+//==================================[LIBRARIES]==================================
+
+#include <Adafruit_NeoPixel.h> // Include the Adafruit NeoPixel library for controlling LED strips.
+
+//=================================[PIN NUMBERS]=================================
+
+#define neoPixelPin 13 // Define the pin number connected to the NeoPixel LED strip.
+const int gripperPin = 12; // Define the pin number for the gripper.
+const int motorA1 = 10; // Define the pin number for controlling the left motor (backward).
+const int motorA2 = 11; // Define the pin number for controlling the left motor (forward).
+const int motorB1 = 6; // Define the pin number for controlling the right motor (forward).
+const int motorB2 = 9; // Define the pin number for controlling the right motor (backward).
+const byte pulsePinLeft = 2; // Define the pin number connected to the left encoder.
+const byte pulsePinRight = 3; // Define the pin number connected to the right encoder.
+const int trigPinFront = 4; // Define the pin number for sending sound (front).
+const int echoPinFront = 12; // Define the pin number for receiving sound (front).
+const int trigPinRight = 7; // Define the pin number for sending sound (right).
+const int echoPinRight = 8; // Define the pin number for receiving sound (right).
+
+//==================================[VARIABLES]==================================
+
+#define NUMPIXELS 4 // Define the number of pixels in the NeoPixel LED strip.
+unsigned long pulseCountLeft; // Variable to store pulse count for left encoder.
+unsigned long pulseCountRight; // Variable to store pulse count for right encoder.
+const unsigned maxPulseLength = 2000; // Define the maximum pulse length.
+long duration; // Variable to store duration for ultrasonic sensor.
+long distanceFront; // Variable to store distance measured by front ultrasonic sensor.
+long distanceRight; // Variable to store distance measured by right ultrasonic sensor.
+int minDistance = 28; // Minimum distance threshold.
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUMPIXELS, neoPixelPin, NEO_GRB + NEO_KHZ800); // Create NeoPixel object.
+
+//===================================[SETUP]===================================
+
+void setup() {
+  strip.begin(); // Initialize the NeoPixel strip.
+  strip.show(); // Display the initialized NeoPixel strip.
+  Serial.begin(9600); // Start serial communication at 9600 baud rate.
+  pinMode(gripperPin, OUTPUT); // Set gripper pin as output.
+  pinMode(motorA1, OUTPUT); // Set left motor control pins as output.
+  pinMode(motorA2, OUTPUT);
+  pinMode(pulsePinLeft, INPUT); // Set left encoder pin as input.
+  pinMode(motorB1, OUTPUT); // Set right motor control pins as output.
+  pinMode(motorB2, OUTPUT);
+  pinMode(pulsePinRight, INPUT); // Set right encoder pin as input.
+  pinMode(trigPinFront, OUTPUT); // Set front ultrasonic sensor trigger pin as output.
+  pinMode(echoPinFront, INPUT); // Set front ultrasonic sensor echo pin as input.
+  pinMode(trigPinRight, OUTPUT); // Set right ultrasonic sensor trigger pin as output.
+  pinMode(echoPinRight, INPUT); // Set right ultrasonic sensor echo pin as input.
+}
+
+//===================================[LOOP]===================================
+
+void loop() {
+  rightMaze(); // Call the rightMaze function repeatedly.
+}
+
+//================================[RIGHT WALL FOLLOWER]================================
+
+void rightMaze(){
+  distanceFront = getDistanceFront(); // Measure distance from front ultrasonic sensor.
+  if(distanceFront < 10){ // If distance from front ultrasonic sensor is less than 10cm.
+    distanceRight = getDistanceRight(); // Measure distance from right ultrasonic sensor.
+    if(distanceRight > minDistance){ // If distance from right ultrasonic sensor is greater than minimum distance threshold.
+      turnRight(); // Turn right.
+      waitUntilPulseCount(16); // Wait until specified pulse count is reached.
+      moveForwards(); // Move forwards.
+      waitUntilPulseCount(30); // Wait until specified pulse count is reached.
+      stopRobot(); // Stop the robot.
+    }
+    else {
+      turnLeft(); // Turn left.
+      waitUntilPulseCount(16); // Wait until specified pulse count is reached.
+      stopRobot(); // Stop the robot.
+    }
+  } else {
+    distanceRight = getDistanceRight(); // Measure distance from right ultrasonic sensor.
+    if(distanceRight > minDistance){ // If distance from right ultrasonic sensor is greater than minimum distance threshold.
+      moveForwards(); // Move forwards.
+      waitUntilPulseCount(20); // Wait until specified pulse count is reached.
+      turnRight(); // Turn right.
+      waitUntilPulseCount(16); // Wait until specified pulse count is reached.
+      moveForwards(); // Move forwards.
+      waitUntilPulseCount(30); // Wait until specified pulse count is reached.
+      stopRobot(); // Stop the robot.
+    }
+    moveForwards(); // Move forwards.
+  }
+  adjustRobot(); // Adjust the robot's path.
+}
+
+//================================[ADJUST THE PATH]================================
+
+void adjustRobot(){
+  distanceRight = getDistanceRight(); // Measure distance from right ultrasonic sensor.
+  if(distanceRight < 4){ // If distance from right ultrasonic sensor is less than 4cm.
+    turnLeft(); // Turn left.
+    waitUntilPulseCount(4); // Wait until specified pulse count is reached.
+  }
+  else if (distanceRight < 8) { // If distance from right ultrasonic sensor is less than 8cm.
+    analogWrite(motorB1, 200); // Apply PWM to control motor speed.
+    analogWrite(motorA2, 200);
+  }
+  else if (distanceRight < 12){ // If distance from right ultrasonic sensor is less than 12cm.
+    analogWrite(motorB1, 150); // Apply PWM to control motor speed.
+    analogWrite(motorA2, 200);
+  }
+  else if (distanceRight < 20){ // If distance from right ultrasonic sensor is less than 20cm.
+    analogWrite(motorB1, 110); // Apply PWM to control motor speed.
+    analogWrite(motorA2, 250);
+  }
+  else if (distanceRight < minDistance){ // If distance from right ultrasonic sensor is less than minimum distance threshold.
+    turnRight(); // Turn right.
+    waitUntilPulseCount(4); // Wait until specified pulse count is reached.
+  }
+}
+
+int getDistanceFront(){
+  digitalWrite(trigPinFront, LOW); // Clear the trigger pin for front ultrasonic sensor.
+  delay(2); // Short delay.
+  digitalWrite(trigPinFront, HIGH); // Generate sound pulse for front ultrasonic sensor.
+  delay(10); // Delay to generate sound pulse.
+  digitalWrite(trigPinFront, LOW); // Stop generating sound pulse.
+  duration = pulseIn(echoPinFront, HIGH); // Measure duration until echo is received.
+  distanceFront = (duration * 0.034)/2; // Calculate distance from duration (in cm).
+  Serial.print("Distance front: "); // Print distance to serial monitor.
+  Serial.println(distanceFront); // Print distance to serial monitor.
+  return distanceFront; // Return measured distance.
+}
+
+int getDistanceRight(){
+  digitalWrite(trigPinRight, LOW); // Clear the trigger pin for right ultrasonic sensor.
+  delay(2); // Short delay.
+  digitalWrite(trigPinRight, HIGH); // Generate sound pulse for right ultrasonic sensor.
+  delay(10); // Delay to generate sound pulse.
+  digitalWrite(trigPinRight, LOW); // Stop generating sound pulse.
+  duration = pulseIn(echoPinRight, HIGH); // Measure duration until echo is received.
+  distanceRight = (duration * 0.034)/2; // Calculate distance from duration (in cm).
+  Serial.print("Distance right: "); // Print distance to serial monitor.
+  Serial.println(distanceRight); // Print distance to serial monitor.
+  return distanceRight; // Return measured distance.
+}
+
+//================================[CHECK THE PULSE OF THE MOTORS]================================
+
+void waitUntilPulseCount(unsigned long count){
+  int previousPulseStateLeft = digitalRead(pulsePinLeft); // Get initial pulse state for left encoder.
+  int previousPulseStateRight = digitalRead(pulsePinRight); // Get initial pulse state for right encoder.
+  unsigned long lastPulseTime = millis(); // Get current time.
+  boolean right = false; // Initialize right flag.
+  boolean left = false; // Initialize left flag.
+  while (1){ // Infinite loop
+    int pulseStateLeft = digitalRead(pulsePinLeft); // Read current pulse state for left encoder.
+    int pulseStateRight = digitalRead(pulsePinRight); // Read current pulse state for right encoder.
+    if (pulseStateLeft != previousPulseStateLeft){ // If pulse state for left encoder changes.
+      previousPulseStateLeft = pulseStateLeft; // Update previous pulse state.
+      pulseCountLeft++; // Increment pulse count for left encoder.
+      lastPulseTime = millis(); // Update last pulse time.
+      if (pulseCountLeft >= count){ // If pulse count for left encoder reaches specified count.
+        pulseCountLeft = 0; // Reset pulse count for left encoder.
+        left = true; // Set left flag to true.
+        analogWrite(motorA1, 0); // Stop left motor.
+        analogWrite(motorA2, 0); // Stop left motor.
+      }
+    }
+    if (pulseStateRight != previousPulseStateRight){ // If pulse state for right encoder changes.
+      previousPulseStateRight = pulseStateRight; // Update previous pulse state.
+      pulseCountRight++; // Increment pulse count for right encoder.
+      lastPulseTime = millis(); // Update last pulse time.
+      if (pulseCountRight >= count){ // If pulse count for right encoder reaches specified count.
+        pulseCountRight = 0; // Reset pulse count for right encoder.
+        right = true; // Set right flag to true.
+        analogWrite(motorB1, 0); // Stop right motor.
+        analogWrite(motorB2, 0); // Stop right motor.
+      }
+    }
+
+    if (millis() - lastPulseTime >= maxPulseLength){ // If no pulse state change for a while.
+      moveBackwards(); // Move backwards.
+      delay(300); // Delay.
+      turnLeft(); // Turn left.
+      waitUntilpulseCountLeft(4); // Wait until specified pulse count is reached.
+      stopRobot(); // Stop the robot.
+      pulseCountRight = 0; // Reset pulse count for right encoder.
+      pulseCountLeft = 0; // Reset pulse count for left encoder.
+      return; // Exit the function.
+    }
+
+    if(right == true && left == true){ // If both flags are true.
+      return; // Exit the function.
+    }
+  }
+  pulseCountRight = 0; // Reset pulse count for right encoder.
+  pulseCountLeft = 0; // Reset pulse count for left encoder.
+  return; // Exit the function.
+}
+
+//================================[ADJUST PATH TO THE LEFT]================================
+
+void waitUntilpulseCountLeft(unsigned long count){
+  int previousPulseStateLeft = digitalRead(pulsePinLeft); // Get initial pulse state for left encoder.
+  unsigned long lastPulseTime = millis(); // Get current time.
+  while (pulseCountLeft < count){ // While pulse count for left encoder is less than specified count.
+    int pulseStateLeft = digitalRead(pulsePinLeft); // Read current pulse state for left encoder.
+    if (pulseStateLeft != previousPulseStateLeft){ // If pulse state for left encoder changes.
+      previousPulseStateLeft = pulseStateLeft; // Update previous pulse state.
+      pulseCountLeft++; // Increment pulse count for left encoder.
+      lastPulseTime = millis(); // Update last pulse time.
+      if (millis() - lastPulseTime >= maxPulseLength){ // If no pulse state change for a while.
+        moveBackwards(); // Move backwards.
+        delay(300); // Delay.
+        stopRobot(); // Stop the robot.
+        pulseCountLeft = 0; // Reset pulse count for left encoder.
+        return; // Exit the function.
+      }
+    }
+  }
+  pulseCountLeft = 0; // Reset pulse count for left encoder.
+  return; // Exit the function.
+}
+
+//================================[ADJUST PATH TO THE RIGHT]================================
+
+void waitUntilpulseCountRight(unsigned long count){
+  int previousPulseStateRight = digitalRead(pulsePinRight); // Get initial pulse state for right encoder.
+  unsigned long lastPulseTime = millis(); // Get current time.
+  while (pulseCountRight < count){ // While pulse count for right encoder is less than specified count.
+    int pulseStateRight = digitalRead(pulsePinRight); // Read current pulse state for right encoder.
+    if (pulseStateRight != previousPulseStateRight){ // If pulse state for right encoder changes.
+      previousPulseStateRight = pulseStateRight; // Update previous pulse state.
+      pulseCountRight++; // Increment pulse count for right encoder.
+      lastPulseTime = millis(); // Update last pulse time.
+      if (millis() - lastPulseTime >= maxPulseLength){ // If no pulse state change for a while.
+        moveBackwards(); // Move backwards.
+        delay(300); // Delay.
+        stopRobot(); // Stop the robot.
+        pulseCountRight = 0; // Reset pulse count for right encoder.
+        return; // Exit the function.
+      }
+    }
+  }
+  pulseCountRight = 0; // Reset pulse count for right encoder.
+  return; // Exit the function.
+}
+
+//================================[MOTOR STOP]================================
+
+void stopRobot(){
+  colorWipe(strip.Color(0, 255, 0)); // Change LED color to green.
+  digitalWrite(motorA1, LOW); // Stop left motor.
+  digitalWrite(motorA2, LOW); // Stop left motor.
+  digitalWrite(motorB1, LOW); // Stop right motor.
+  digitalWrite(motorB2, LOW); // Stop right motor.
+}
+
+//================================[MOTOR FORWARD]================================
+
+void moveForwards(){
+  colorWipe(strip.Color(255, 0, 0)); // Change LED color to red.
+  digitalWrite(motorA1, LOW); // Set left motor direction.
+  digitalWrite(motorA2, HIGH);
+  digitalWrite(motorB1, HIGH); // Set right motor direction.
+  digitalWrite(motorB2, LOW);
+
+  delay(10); // Short delay.
+
+  analogWrite(motorA1, 0); // Start left motor.
+  analogWrite(motorA2, 200); // Start left motor.
+  analogWrite(motorB1, 200); // Start right motor.
+  analogWrite(motorB2, 0); // Start right motor.
+}
+
+//================================[MOTOR BACKWARD]================================
+
+void moveBackwards(){
+  digitalWrite(motorA1, HIGH); // Set left motor direction.
+  digitalWrite(motorA2, LOW);
+  digitalWrite(motorB1, LOW); // Set right motor direction.
+  digitalWrite(motorB2, HIGH);
+
+  delay(10); // Short delay.
+
+  analogWrite(motorA1, 200); // Start left motor.
+  analogWrite(motorA2, 0); // Start left motor.
+  analogWrite(motorB1, 0); // Start right motor.
+  analogWrite(motorB2, 200); // Start right motor.
+}
+
+//================================[MOTOR LEFT]================================
+
+void turnLeft(){
+  colorWipe(strip.Color(0, 0, 255)); // Change LED color to blue.
+  digitalWrite(motorA1, HIGH); // Set left motor direction.
+  digitalWrite(motorA2, LOW);
+  digitalWrite(motorB1, HIGH); // Set right motor direction.
+  digitalWrite(motorB2, LOW);
+
+  delay(10); // Short delay.
+
+  analogWrite(motorA1, 200); // Start left motor.
+  analogWrite(motorA2, 0); // Start left motor.
+  analogWrite(motorB1, 200); // Start right motor.
+  analogWrite(motorB2, 0); // Start right motor.
+}
+
+//================================[MOTOR RIGHT]================================
+
+void turnRight(){
+  colorWipe(strip.Color(0, 0, 255)); // Change LED color to blue.
+  digitalWrite(motorA1, LOW); // Set left motor direction.
+  digitalWrite(motorA2, HIGH);
+  digitalWrite(motorB1, LOW); // Set right motor direction.
+  digitalWrite(motorB2, HIGH);
+
+  delay(10); // Short delay.
+
+  analogWrite(motorA1, 0); // Start left motor.
+  analogWrite(motorA2, 200); // Start left motor.
+  analogWrite(motorB1, 0); // Start right motor.
+  analogWrite(motorB2, 200); // Start right motor.
+}
+
+//================================[LED COLOR]================================
+
+void colorWipe(uint32_t color) {
+  for(int i = 0; i < strip.numPixels(); i++) { // Loop through all pixels in the NeoPixel strip.
+    strip.setPixelColor(i, color); // Set color for each pixel.
+    strip.show(); // Update NeoPixel strip to display the set colors.
+  }
+}
