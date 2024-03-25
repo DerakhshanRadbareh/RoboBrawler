@@ -1,3 +1,4 @@
+
 #define MOTOR_LEFT_PIN_1 10
 #define MOTOR_LEFT_PIN_2 11
 #define MOTOR_RIGHT_PIN_1 9
@@ -52,7 +53,6 @@ void setup() {
   delay(200);
 
   moveOutOfSquare();
-  delay(200);
 
   moveLeftIR();
   delay(200);
@@ -213,7 +213,7 @@ void moveOutOfSquare() {
     irValues[6] = analogRead(irSensors[6]);
     irValues[7] = analogRead(irSensors[7]);
 
-    if (irValues[1] < lineThreshold && irValues[2] < lineThreshold && irValues[3] < lineThreshold && irValues[4] < lineThreshold && irValues[5] < lineThreshold && irValues[6] < lineThreshold) {
+    if (irValues[2] < lineThreshold && irValues[3] < lineThreshold && irValues[4] < lineThreshold) {
       isOutsideSquare = true;
     }
   }
