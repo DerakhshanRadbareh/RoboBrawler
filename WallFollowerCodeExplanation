@@ -5,7 +5,7 @@
 //=================================[PIN NUMBERS]=================================
 
 #define neoPixelPin 13 // Define the pin number connected to the NeoPixel LED strip.
-const int gripperPin = 12; // Define the pin number for the gripper.
+const int gripperPin = 5; // Define the pin number for the gripper.
 const int motorA1 = 10; // Define the pin number for controlling the left motor (backward).
 const int motorA2 = 11; // Define the pin number for controlling the left motor (forward).
 const int motorB1 = 6; // Define the pin number for controlling the right motor (forward).
