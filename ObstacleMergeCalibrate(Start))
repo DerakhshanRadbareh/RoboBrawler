@@ -1,9 +1,13 @@
-#define frontTrigPin 4
-#define frontEchoPin 12
-#define MOTOR_LEFT_PIN_1 10
-#define MOTOR_LEFT_PIN_2 11
-#define MOTOR_RIGHT_PIN_1 9
-#define MOTOR_RIGHT_PIN_2 6
+#define trigPinFront 4
+#define echoPinFront 12
+#define motorA1 10
+#define motorA2 11
+#define motorB2 9
+#define motorB1 6
+
+#define CLOSE_ANGLE 0      // Angle to open the gripper
+#define OPEN_ANGLE 90    // Angle to close the gripper
+#define PULSE_PERIOD 20000  // PWM period in microseconds (50Hz)
 
 unsigned long duration;
 float distance;
@@ -13,7 +17,7 @@ boolean start=false;
 #define lineThreshold 800
 
 // Servo pin definition (PWM pin)
-#define servoPin 5
+#define gripperPin 5
 
 // Initial left and right speed of analog PWM servo motors
 byte speedL = 150;
@@ -36,20 +40,16 @@ boolean isInLine = false;
 void setup() {
   Serial.begin(9600);
   Serial.begin(9600); // Initialize serial communication
-  pinMode(frontTrigPin, OUTPUT);
-  pinMode(frontEchoPin, INPUT);
-  pinMode(MOTOR_RIGHT_PIN_1, OUTPUT);
-  pinMode(MOTOR_RIGHT_PIN_2, OUTPUT);
-  pinMode(MOTOR_LEFT_PIN_1, OUTPUT);
-  pinMode(MOTOR_LEFT_PIN_2, OUTPUT);
+  pinMode(trigPinFront, OUTPUT);
+  pinMode(echoPinFront, INPUT);
+  pinMode(motorB2, OUTPUT);
+  pinMode(motorB1, OUTPUT);
+  pinMode(motorA1, OUTPUT);
+  pinMode(motorA2, OUTPUT);
 
   // Set servo pin as output
-  pinMode(servoPin, OUTPUT);
+  pinMode(gripperPin, OUTPUT);
 
-  // Timer setting for 50 Hz frequency
-  TCCR1A = (1 << WGM11) | (1 << WGM10);
-  TCCR1B = (1 << CS11);
-  OCR1A = 20000;  // 20,000 microseconds for a 50 Hz period
 
   // Initial gripper position
 
@@ -67,13 +67,13 @@ void loop() {
     start=false;
     }
     if(start==true){
-      openGripper();
-
+  openGripper();    // Open the gripper
+  delay(500);      // Wait for 2 seconds
     countLine(4);
     delay(300);
   
-    closeGripper();
-    delay(200);
+  closeGripper();   // Close the gripper
+  delay(500);      // Wait for 2 seconds
   
     moveOutOfSquare();
   
@@ -87,14 +87,35 @@ void loop() {
     stopDrive();
     }
   }
+
+  void openGripper() {
+  int pulseWidth = map(OPEN_ANGLE, 0, 180, 1000, 2000);  // Convert angle to pulse width
+  sendPulse(pulseWidth);  // Send PWM pulse
+}
+
+void closeGripper() {
+  int pulseWidth = map(CLOSE_ANGLE, 0, 180, 1000, 2000);  // Convert angle to pulse width
+  sendPulse(pulseWidth);  // Send PWM pulse
+}
+
+void sendPulse(int pulseWidth) {
+  unsigned long startTime = micros();  // Get the current time in microseconds
+
+  while (micros() - startTime < PULSE_PERIOD) {  // Send pulse for the duration of the period
+    digitalWrite(gripperPin, HIGH);    // Set the pin high
+    delayMicroseconds(pulseWidth);     // Wait for the specified pulse width
+    digitalWrite(gripperPin, LOW);     // Set the pin low
+    delayMicroseconds(PULSE_PERIOD - pulseWidth);  // Wait for the remaining period
+  }
+}
   float checkDistance() {
-    digitalWrite(frontTrigPin, LOW);
+    digitalWrite(trigPinFront, LOW);
     delayMicroseconds(2);
-    digitalWrite(frontTrigPin, HIGH);
+    digitalWrite(trigPinFront, HIGH);
     delayMicroseconds(10);
-    digitalWrite(frontTrigPin, LOW);
+    digitalWrite(trigPinFront, LOW);
     
-    duration = pulseIn(frontEchoPin, HIGH);
+    duration = pulseIn(echoPinFront, HIGH);
     float distance = (duration / 2.0) * 0.0343; // Ensure float division
     
     return distance; // Return the measured distance
@@ -102,30 +123,30 @@ void loop() {
 
 // Functions to control robot move to forward
 void moveForward(byte leftSpeedf, byte rightSpeed) {
-  analogWrite(MOTOR_RIGHT_PIN_1, 0);
-  analogWrite(MOTOR_RIGHT_PIN_2, rightSpeed);
-  analogWrite(MOTOR_LEFT_PIN_1, 0);
-  analogWrite(MOTOR_LEFT_PIN_2, leftSpeedf);
+  analogWrite(motorB2, 0);
+  analogWrite(motorB1, rightSpeed);
+  analogWrite(motorA1, 0);
+  analogWrite(motorA2, leftSpeedf);
 
   delay(10);
 }
 
 // Functions to stop robot
 void stopDrive() {
-  analogWrite(MOTOR_RIGHT_PIN_1, 0);
-  analogWrite(MOTOR_RIGHT_PIN_2, 0);
-  analogWrite(MOTOR_LEFT_PIN_1, 0);
-  analogWrite(MOTOR_LEFT_PIN_2, 0);
+  analogWrite(motorB2, 0);
+  analogWrite(motorB1, 0);
+  analogWrite(motorA1, 0);
+  analogWrite(motorA2, 0);
 }
 
 // Functions to control robot move to forward
 void moveLeftIR() {
   boolean lineDetected = false;
 
-  analogWrite(MOTOR_RIGHT_PIN_1, 0);
-  analogWrite(MOTOR_RIGHT_PIN_2, 149);
-  analogWrite(MOTOR_LEFT_PIN_1, 255);
-  analogWrite(MOTOR_LEFT_PIN_2, 0);
+  analogWrite(motorB2, 0);
+  analogWrite(motorB1, 255);
+  analogWrite(motorA1, 255);
+  analogWrite(motorA2, 0);
 
   while (!lineDetected) {
     // Read sensor values
@@ -182,22 +203,13 @@ void setServoPosition(int pulseWidth) {
   // Send PWM pulse to servo
   int i = 1;
   while (i <= 10) {
-    digitalWrite(servoPin, HIGH);
+    digitalWrite(gripperPin, HIGH);
     delayMicroseconds(pulseWidth);
-    digitalWrite(servoPin, LOW);
+    digitalWrite(gripperPin, LOW);
     i++;
   }
 }
 
-// Gripper opening function
-void openGripper() {
-  setServoPosition(positionMiddlePulseWidth);
-}
-
-// Gripper closing function
-void closeGripper() {
-  setServoPosition(positionLeftPulseWidth);
-}
 
 // Count black lines and move forward until finished black line counted
 void countLine(int target) {
@@ -231,7 +243,6 @@ void countLine(int target) {
       }
     }
   }
-
   stopDrive();
 }
 
@@ -254,6 +265,4 @@ void moveOutOfSquare() {
       isOutsideSquare = true;
     }
   }
-
-  // stopDrive();
 }
