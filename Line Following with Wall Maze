@@ -1,0 +1,464 @@
+#include <Adafruit_NeoPixel.h>
+
+#define NEOPIXEL_PIN 13
+const int MOTOR_A1 = 10;
+const int MOTOR_A2 = 11;
+const int MOTOR_B1 = 6;
+const int MOTOR_B2 = 9;
+const byte PULSE_PIN_LEFT = 2;
+const byte PULSE_PIN_RIGHT = 3;
+const int TRIG_PIN_FRONT = 4;
+const int ECHO_PIN_FRONT = 12;
+const int TRIG_PIN_RIGHT = 7;
+const int ECHO_PIN_RIGHT = 8;
+
+#define NUM_PIXELS 4
+unsigned long pulseCountLeft;
+unsigned long pulseCountRight;
+const unsigned int MAX_PULSE_LENGTH = 2000;
+long duration;
+long distanceFront;
+long distanceRight;
+int minDistance = 28;
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUM_PIXELS, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
+
+#define CLOSE_GRIP_ANGLE 0
+#define OPEN_GRIP_ANGLE 90
+#define PULSE_PERIOD_MICROS 20000
+float distance;
+boolean start = false;
+#define LINE_THRESHOLD 800
+#define GRIPPER_PIN 5
+byte leftMotorSpeed = 150;
+byte rightMotorSpeed = 160;
+int infraredSensorPins[] = {A0, A1, A2, A3, A4, A5, A6, A7};
+int infraredSensorValues[] = {0, 0, 0, 0, 0, 0, 0, 0};
+boolean executedOnce = false;
+boolean isInLine = false;
+
+void setup() {
+    strip.begin();
+    strip.show();
+    Serial.begin(9600);
+    pinMode(MOTOR_A1, OUTPUT);
+    pinMode(MOTOR_A2, OUTPUT);
+    pinMode(PULSE_PIN_LEFT, INPUT);
+    pinMode(MOTOR_B1, OUTPUT);
+    pinMode(MOTOR_B2, OUTPUT);
+    pinMode(PULSE_PIN_RIGHT, INPUT);
+    pinMode(TRIG_PIN_FRONT, OUTPUT);
+    pinMode(ECHO_PIN_FRONT, INPUT);
+    pinMode(TRIG_PIN_RIGHT, OUTPUT);
+    pinMode(ECHO_PIN_RIGHT, INPUT);
+    pinMode(GRIPPER_PIN, OUTPUT);
+    pinMode(A0, INPUT);
+    pinMode(A1, INPUT);
+    pinMode(A2, INPUT);
+    pinMode(A3, INPUT);
+    pinMode(A4, INPUT);
+    pinMode(A5, INPUT);
+    pinMode(A6, INPUT);
+    pinMode(A7, INPUT);
+}
+
+void loop() {
+    distance = checkDistance();
+    if (distance < 30 && !executedOnce) {
+        executedOnce = true;
+        delay(1000);
+        
+        openGripper();
+        delay(500);
+
+        countLines(4);
+        delay(300);
+
+        closeGripper();
+        delay(500);
+
+        moveOutOfSquare();
+
+        moveLeftIR();
+
+        lineFollowing();
+    }
+}
+
+void rightMaze() {
+    distanceFront = getDistanceFront();
+    if (distanceFront < 12) {
+        distanceRight = getDistanceRight();
+        if (distanceRight > minDistance) {
+            turnRight();
+            waitUntilPulseCount(16);
+            moveForwards();
+            waitUntilPulseCount(30);
+            stopRobot();
+        } else {
+            turnLeft();
+            waitUntilPulseCount(16);
+            stopRobot();
+        }
+    } else {
+        distanceRight = getDistanceRight();
+        if (distanceRight > minDistance) {
+            moveForwards();
+            waitUntilPulseCount(20);
+            turnRight();
+            waitUntilPulseCount(16);
+            moveForwards();
+            waitUntilPulseCount(30);
+            stopRobot();
+        }
+        moveForwards();
+    }
+    adjustRobot();
+}
+
+void adjustRobot() {
+    distanceRight = getDistanceRight();
+    if (distanceRight < 4) {
+        turnLeft();
+        waitUntilPulseCount(4);
+    } else if (distanceRight < 8) {
+        analogWrite(MOTOR_B1, 200);
+        analogWrite(MOTOR_A2, 200);
+    } else if (distanceRight < 12) {
+        analogWrite(MOTOR_B1, 150);
+        analogWrite(MOTOR_A2, 200);
+    } else if (distanceRight < 20) {
+        analogWrite(MOTOR_B1, 110);
+        analogWrite(MOTOR_A2, 250);
+    } else if (distanceRight < minDistance) {
+        turnRight();
+        waitUntilPulseCount(4);
+    }
+}
+
+int getDistanceFront() {
+    digitalWrite(TRIG_PIN_FRONT, LOW);
+    delay(2);
+    digitalWrite(TRIG_PIN_FRONT, HIGH);
+    delay(10);
+    digitalWrite(TRIG_PIN_FRONT, LOW);
+    duration = pulseIn(ECHO_PIN_FRONT, HIGH);
+    distanceFront = (duration * 0.034) / 2;
+    Serial.print("Distance front: ");
+    Serial.println(distanceFront);
+    return distanceFront;
+}
+
+int getDistanceRight() {
+    digitalWrite(TRIG_PIN_RIGHT, LOW);
+    delay(2);
+    digitalWrite(TRIG_PIN_RIGHT, HIGH);
+    delay(10);
+    digitalWrite(TRIG_PIN_RIGHT, LOW);
+    duration = pulseIn(ECHO_PIN_RIGHT, HIGH);
+    distanceRight = (duration * 0.034) / 2;
+    Serial.print("Distance right: ");
+    Serial.println(distanceRight);
+    return distanceRight;
+}
+
+void waitUntilPulseCount(unsigned long count) {
+    int previousPulseStateLeft = digitalRead(PULSE_PIN_LEFT);
+    int previousPulseStateRight = digitalRead(PULSE_PIN_RIGHT);
+    unsigned long lastPulseTime = millis();
+    boolean right = false;
+    boolean left = false;
+    while (1) {
+        int pulseStateLeft = digitalRead(PULSE_PIN_LEFT);
+        int pulseStateRight = digitalRead(PULSE_PIN_RIGHT);
+        if (pulseStateLeft != previousPulseStateLeft) {
+            previousPulseStateLeft = pulseStateLeft;
+            pulseCountLeft++;
+            lastPulseTime = millis();
+            if (pulseCountLeft >= count) {
+                pulseCountLeft = 0;
+                left = true;
+                analogWrite(MOTOR_A1, 0);
+                analogWrite(MOTOR_A2, 0);
+            }
+        }
+        if (pulseStateRight != previousPulseStateRight) {
+            previousPulseStateRight = pulseStateRight;
+            pulseCountRight++;
+            lastPulseTime = millis();
+            if (pulseCountRight >= count) {
+                pulseCountRight = 0;
+                right = true;
+                analogWrite(MOTOR_B1, 0);
+                analogWrite(MOTOR_B2, 0);
+            }
+        }
+
+        if (millis() - lastPulseTime >= MAX_PULSE_LENGTH) {
+            moveBackwards();
+            delay(300);
+            turnLeft();
+            waitUntilPulseCountLeft(4);
+            stopRobot();
+            pulseCountRight = 0;
+            pulseCountLeft = 0;
+            return;
+        }
+
+        if (right && left) {
+            return;
+        }
+    }
+    pulseCountRight = 0;
+    pulseCountLeft = 0;
+    return;
+}
+
+void waitUntilPulseCountLeft(unsigned long count) {
+    int previousPulseStateLeft = digitalRead(PULSE_PIN_LEFT);
+    unsigned long lastPulseTime = millis();
+    while (pulseCountLeft < count) {
+        int pulseStateLeft = digitalRead(PULSE_PIN_LEFT);
+        if (pulseStateLeft != previousPulseStateLeft) {
+            previousPulseStateLeft = pulseStateLeft;
+            pulseCountLeft++;
+            lastPulseTime = millis();
+            if (millis() - lastPulseTime >= MAX_PULSE_LENGTH) {
+                moveBackwards();
+                delay(300);
+                stopRobot();
+                pulseCountLeft = 0;
+                return;
+            }
+        }
+    }
+    pulseCountLeft = 0;
+    return;
+}
+
+void stopRobot() {
+    colorWipe(strip.Color(0, 255, 0));
+    digitalWrite(MOTOR_A1, LOW);
+    digitalWrite(MOTOR_A2, LOW);
+    digitalWrite(MOTOR_B1, LOW);
+    digitalWrite(MOTOR_B2, LOW);
+}
+
+void moveForwards() {
+    colorWipe(strip.Color(255, 0, 0));
+
+    analogWrite(MOTOR_A1, 0);
+    analogWrite(MOTOR_A2, 200);
+    analogWrite(MOTOR_B1, 200);
+    analogWrite(MOTOR_B2, 0);
+}
+
+void moveBackwards() {
+    analogWrite(MOTOR_A1, 200);
+    analogWrite(MOTOR_A2, 0);
+    analogWrite(MOTOR_B1, 0);
+    analogWrite(MOTOR_B2, 200);
+}
+
+void turnLeft() {
+    colorWipe(strip.Color(0, 0, 255));
+
+    analogWrite(MOTOR_A1, 200);
+    analogWrite(MOTOR_A2, 0);
+    analogWrite(MOTOR_B1, 200);
+    analogWrite(MOTOR_B2, 0);
+}
+
+void turnRight() {
+    colorWipe(strip.Color(0, 0, 255));
+
+    analogWrite(MOTOR_A1, 0);
+    analogWrite(MOTOR_A2, 200);
+    analogWrite(MOTOR_B1, 0);
+    analogWrite(MOTOR_B2, 200);
+}
+
+void colorWipe(uint32_t color) {
+    for (int i = 0; i < strip.numPixels(); i++) {
+        strip.setPixelColor(i, color);
+        strip.show();
+    }
+}
+
+void openGripper() {
+    int pulseWidth = map(OPEN_GRIP_ANGLE, 0, 180, 1000, 2000);
+    sendPulse(pulseWidth);
+}
+
+void closeGripper() {
+    int pulseWidth = map(CLOSE_GRIP_ANGLE, 0, 180, 1000, 2000);
+    sendPulse(pulseWidth);
+}
+
+void sendPulse(int pulseWidth) {
+    unsigned long startTime = micros();
+
+    while (micros() - startTime < PULSE_PERIOD_MICROS) {
+        digitalWrite(GRIPPER_PIN, HIGH);
+        delayMicroseconds(pulseWidth);
+        digitalWrite(GRIPPER_PIN, LOW);
+        delayMicroseconds(PULSE_PERIOD_MICROS - pulseWidth);
+    }
+}
+
+float checkDistance() {
+    digitalWrite(TRIG_PIN_FRONT, LOW);
+    delayMicroseconds(2);
+    digitalWrite(TRIG_PIN_FRONT, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(TRIG_PIN_FRONT, LOW);
+  
+    duration = pulseIn(ECHO_PIN_FRONT, HIGH);
+    float distance = (duration / 2.0) * 0.0343;
+  
+    return distance;
+}
+
+void moveForward(byte leftSpeed, byte rightSpeed) {
+    analogWrite(MOTOR_B2, 0);
+    analogWrite(MOTOR_B1, rightSpeed);
+    analogWrite(MOTOR_A1, 0);
+    analogWrite(MOTOR_A2, leftSpeed);
+
+    delay(10);
+}
+
+void stopDrive() {
+    analogWrite(MOTOR_B2, 0);
+    analogWrite(MOTOR_B1, 0);
+    analogWrite(MOTOR_A1, 0);
+    analogWrite(MOTOR_A2, 0);
+}
+
+void moveLeftIR() {
+    analogWrite(MOTOR_B2, 0);
+    analogWrite(MOTOR_B1, 220);
+    analogWrite(MOTOR_A1, 0);
+    analogWrite(MOTOR_A2, 0);
+    delay(800);
+}
+
+void countLines(int target) {
+    int lineCount = 0;
+    boolean lineDetected = false;
+
+    moveForward(leftMotorSpeed, rightMotorSpeed);
+
+    while (lineCount < target) {
+        for (int i = 0; i < 8; i++) {
+            infraredSensorValues[i] = analogRead(infraredSensorPins[i]);
+        }
+
+        if (!lineDetected) {
+            if (infraredSensorValues[1] > LINE_THRESHOLD && infraredSensorValues[2] > LINE_THRESHOLD &&
+                infraredSensorValues[3] > LINE_THRESHOLD && infraredSensorValues[4] > LINE_THRESHOLD &&
+                infraredSensorValues[5] > LINE_THRESHOLD && infraredSensorValues[6] > LINE_THRESHOLD) {
+                lineCount++;
+                lineDetected = true;
+            }
+        } else {
+            if (infraredSensorValues[1] < LINE_THRESHOLD && infraredSensorValues[2] < LINE_THRESHOLD &&
+                infraredSensorValues[3] < LINE_THRESHOLD && infraredSensorValues[4] < LINE_THRESHOLD &&
+                infraredSensorValues[5] < LINE_THRESHOLD && infraredSensorValues[6] < LINE_THRESHOLD) {
+                lineDetected = false;
+            }
+        }
+    }
+    stopDrive();
+}
+
+void moveOutOfSquare() {
+    boolean isOutsideSquare = false;
+    moveForward(leftMotorSpeed, rightMotorSpeed);
+
+    while (!isOutsideSquare) {
+        for (int i = 0; i < 8; i++) {
+            infraredSensorValues[i] = analogRead(infraredSensorPins[i]);
+        }
+
+        if (infraredSensorValues[2] < LINE_THRESHOLD && infraredSensorValues[3] < LINE_THRESHOLD &&
+            infraredSensorValues[4] < LINE_THRESHOLD) {
+            isOutsideSquare = true;
+        }
+    }
+}
+
+void checkSensorsValues() {
+    for (int i = 0; i < sizeof(infraredSensorPins) / sizeof(infraredSensorPins[0]); i++) {
+        if (analogRead(infraredSensorPins[i]) > 800) {
+            infraredSensorValues[i] = 1;
+        } else {
+            infraredSensorValues[i] = 0;
+        }
+    }
+}
+
+void lineFollowing() {
+    checkSensorsValues();
+    if (infraredSensorValues[4] && infraredSensorValues[3] && (infraredSensorValues[5] || infraredSensorValues[2])) {
+        analogWrite(MOTOR_B1, 255);
+        analogWrite(MOTOR_B2, 0);
+        analogWrite(MOTOR_A2, 255);
+        analogWrite(MOTOR_A1, 0);
+    } else if (infraredSensorValues[7] || infraredSensorValues[6]) {
+        turnLeftLine();
+    } else if (infraredSensorValues[0] || infraredSensorValues[1]) {
+        turnRightLine();
+    } else if (infraredSensorValues[2]) {
+        analogWrite(MOTOR_B1, 255);
+        analogWrite(MOTOR_B2, 0);
+        analogWrite(MOTOR_A2, 210);
+        analogWrite(MOTOR_A1, 0);
+    } else if (infraredSensorValues[5]) {
+        analogWrite(MOTOR_B1, 210);
+        analogWrite(MOTOR_B2, 0);
+        analogWrite(MOTOR_A2, 255);
+        analogWrite(MOTOR_A1, 0);
+    } else if (infraredSensorValues[3] && infraredSensorValues[4]) {
+        analogWrite(MOTOR_B1, 255);
+        analogWrite(MOTOR_B2, 0);
+        analogWrite(MOTOR_A2, 255);
+        analogWrite(MOTOR_A1, 0);
+    } else if (infraredSensorValues[3] && !infraredSensorValues[4]) {
+        analogWrite(MOTOR_B1, 255);
+        analogWrite(MOTOR_B2, 0);
+        analogWrite(MOTOR_A2, 245);
+        analogWrite(MOTOR_A1, 0);
+    } else if (infraredSensorValues[4] && !infraredSensorValues[3]) {
+        analogWrite(MOTOR_B1, 245);
+        analogWrite(MOTOR_B2, 0);
+        analogWrite(MOTOR_A2, 255);
+        analogWrite(MOTOR_A1, 0);
+    } else {
+        rightMaze();
+    }
+    if (infraredSensorValues[0] == 1 && infraredSensorValues[7] == 1) {
+        stopDrive();
+        openGripper();
+    }
+    lineFollowing();
+}
+
+void turnRightLine() {
+    while (!(infraredSensorValues[4] || infraredSensorValues[3])) {
+        checkSensorsValues();
+        analogWrite(MOTOR_B1, 255);
+        analogWrite(MOTOR_B2, 0);
+        analogWrite(MOTOR_A2, 0);
+        analogWrite(MOTOR_A1, 0);
+    }
+}
+
+void turnLeftLine() {
+    while (!(infraredSensorValues[4] || infraredSensorValues[3])) {
+        checkSensorsValues();
+        analogWrite(MOTOR_B1, 0);
+        analogWrite(MOTOR_B2, 0);
+        analogWrite(MOTOR_A2, 255);
+        analogWrite(MOTOR_A1, 0);
+    }
+}
